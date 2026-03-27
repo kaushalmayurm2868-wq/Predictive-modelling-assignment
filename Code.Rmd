@@ -1,0 +1,124 @@
+---
+title: "Predictive modelling assignment1"
+author: "Kaushal Mayur"
+date: "2026-03-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 8,
+  fig.height = 5
+)
+```
+
+---
+
+# Introduction
+
+This report presents a logistic regression analysis of the **Diabetes Prediction Dataset** sourced from [Kaggle](https://www.kaggle.com/datasets/iammustafatz/diabetes-prediction-dataset).
+
+**Study Design:** Cross-sectional observational study  
+**Study Population:** ~100,000 patients with demographic, lifestyle, and clinical information  
+**Outcome:** Binary diabetes status (0 = No Diabetes, 1 = Diabetes)  
+
+The aim is to build and evaluate a logistic regression model to predict the probability of diabetes based on 8 clinical and demographic predictors.
+
+---
+
+# Setup and Data Loading
+
+```{r libraries}
+library(tidyverse)
+library(caret)
+library(pROC)
+library(ggplot2)
+library(gridExtra)
+library(knitr)
+library(kableExtra)
+library(ResourceSelection) 
+```
+
+```{r load-data}
+
+df <- read.csv("diabetes_prediction_dataset.csv", stringsAsFactors = FALSE)
+
+
+dim(df)
+head(df)
+```
+
+---
+
+# Data Inspection and Preprocessing
+
+## Variable Overview
+
+```{r variable-overview}
+str(df)
+summary(df)
+```
+
+## Missing Data Assessment
+
+```{r missing-data}
+missing_summary <- data.frame(
+  Variable = names(df),
+  Missing_Count = colSums(is.na(df)),
+  Missing_Percent = round(colSums(is.na(df)) / nrow(df) * 100, 2)
+)
+
+kable(missing_summary, row.names = FALSE,
+      caption = "Missing Data Summary") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+## Encoding and Cleaning
+
+```{r preprocessing}
+
+df <- df %>%
+  mutate(
+    gender = case_when(
+      gender == "Male"   ~ 1,
+      gender == "Female" ~ 0,
+      TRUE               ~ NA_real_
+    ),
+ 
+    smoking_history = case_when(
+      smoking_history == "never"   ~ 0,
+      smoking_history == "former"  ~ 1,
+      smoking_history == "current" ~ 2,
+      smoking_history == "ever"    ~ 1,
+      smoking_history == "not current" ~ 1,
+      TRUE                         ~ NA_real_
+    )
+  )
+
+
+df_clean <- df %>% drop_na()
+
+cat("Observations after cleaning:", nrow(df_clean), "\n")
+cat("Diabetes cases:", sum(df_clean$diabetes), "\n")
+cat("Prevalence:", round(mean(df_clean$diabetes) * 100, 2), "%\n")
+```
+
+---
+
+# Exploratory Data Analysis
+
+## Outcome Distribution
+
+```{r outcome-dist}
+ggplot(df_clean, aes(x = factor(diabetes), fill = factor(diabetes))) +
+  geom_bar(width = 0.5, show.legend = FALSE) +
+  scale_fill_manual(values = c("#2196F3", "#F44336")) +
+  scale_x_discrete(labels = c("No Diabetes", "Diabetes")) +
+  labs(title = "Distribution of Diabetes Outcome",
+       x = "Diabetes Status", y = "Count") +
+  theme_minimal(base_size = 13)
+```
