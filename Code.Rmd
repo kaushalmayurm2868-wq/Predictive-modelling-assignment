@@ -80,7 +80,7 @@ kable(missing_summary, row.names = FALSE,
 ## Encoding and Cleaning
 
 ```{r preprocessing}
-# Recode gender: keep Male/Female, set 'Other' to NA
+
 df <- df %>%
   mutate(
     gender = case_when(
@@ -88,7 +88,7 @@ df <- df %>%
       gender == "Female" ~ 0,
       TRUE               ~ NA_real_
     ),
-    # Recode smoking history to ordinal numeric
+    
     smoking_history = case_when(
       smoking_history == "never"   ~ 0,
       smoking_history == "former"  ~ 1,
@@ -99,7 +99,7 @@ df <- df %>%
     )
   )
 
-# Remove rows with any remaining NAs
+
 df_clean <- df %>% drop_na()
 
 cat("Observations after cleaning:", nrow(df_clean), "\n")
@@ -170,7 +170,7 @@ num_vars <- df_clean %>%
 
 cor_matrix <- round(cor(num_vars, use = "complete.obs"), 2)
 
-# Melt and plot
+
 cor_df <- as.data.frame(as.table(cor_matrix))
 names(cor_df) <- c("Var1", "Var2", "Correlation")
 
