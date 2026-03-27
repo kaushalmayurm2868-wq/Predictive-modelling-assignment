@@ -80,7 +80,7 @@ kable(missing_summary, row.names = FALSE,
 ## Encoding and Cleaning
 
 ```{r preprocessing}
-
+# Recode gender: keep Male/Female, set 'Other' to NA
 df <- df %>%
   mutate(
     gender = case_when(
@@ -88,7 +88,7 @@ df <- df %>%
       gender == "Female" ~ 0,
       TRUE               ~ NA_real_
     ),
- 
+    # Recode smoking history to ordinal numeric
     smoking_history = case_when(
       smoking_history == "never"   ~ 0,
       smoking_history == "former"  ~ 1,
@@ -99,7 +99,7 @@ df <- df %>%
     )
   )
 
-
+# Remove rows with any remaining NAs
 df_clean <- df %>% drop_na()
 
 cat("Observations after cleaning:", nrow(df_clean), "\n")
@@ -121,4 +121,65 @@ ggplot(df_clean, aes(x = factor(diabetes), fill = factor(diabetes))) +
   labs(title = "Distribution of Diabetes Outcome",
        x = "Diabetes Status", y = "Count") +
   theme_minimal(base_size = 13)
+```
+
+## Continuous Predictor Distributions by Outcome
+
+```{r continuous-dist}
+cont_vars <- c("age", "bmi", "HbA1c_level", "blood_glucose_level")
+
+plots <- lapply(cont_vars, function(var) {
+  ggplot(df_clean, aes_string(x = var, fill = "factor(diabetes)")) +
+    geom_density(alpha = 0.6) +
+    scale_fill_manual(values = c("#2196F3", "#F44336"),
+                      labels = c("No Diabetes", "Diabetes"),
+                      name = "") +
+    labs(title = var, x = var, y = "Density") +
+    theme_minimal(base_size = 11)
+})
+
+grid.arrange(grobs = plots, ncol = 2)
+```
+
+## Binary Predictors: Diabetes Prevalence
+
+```{r binary-predictors}
+binary_vars <- c("hypertension", "heart_disease")
+
+prev_table <- df_clean %>%
+  select(all_of(binary_vars), diabetes) %>%
+  pivot_longer(-diabetes, names_to = "variable", values_to = "value") %>%
+  group_by(variable, value) %>%
+  summarise(prevalence = round(mean(diabetes) * 100, 2), .groups = "drop")
+
+ggplot(prev_table, aes(x = factor(value), y = prevalence, fill = variable)) +
+  geom_col(position = "dodge", width = 0.5) +
+  facet_wrap(~variable, scales = "free_x") +
+  scale_fill_manual(values = c("#4CAF50", "#FF9800")) +
+  labs(title = "Diabetes Prevalence by Binary Predictors",
+       x = "Value (0 = No, 1 = Yes)", y = "Prevalence (%)") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none")
+```
+
+## Correlation Heatmap (Continuous Variables)
+
+```{r correlation}
+num_vars <- df_clean %>%
+  select(age, bmi, HbA1c_level, blood_glucose_level, diabetes)
+
+cor_matrix <- round(cor(num_vars, use = "complete.obs"), 2)
+
+# Melt and plot
+cor_df <- as.data.frame(as.table(cor_matrix))
+names(cor_df) <- c("Var1", "Var2", "Correlation")
+
+ggplot(cor_df, aes(Var1, Var2, fill = Correlation)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = Correlation), size = 3.5) +
+  scale_fill_gradient2(low = "#2196F3", mid = "white", high = "#F44336",
+                       midpoint = 0, limits = c(-1, 1)) +
+  labs(title = "Correlation Heatmap", x = "", y = "") +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
