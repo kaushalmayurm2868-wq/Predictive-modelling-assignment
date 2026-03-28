@@ -1,9 +1,9 @@
----
-title: "Predictive modelling assignment1"
-author: "Kaushal Mayur"
-date: "2026-03-24"
-output: html_document
----
+
+title: "Diabetes Prediction: Logistic Regression Analysis"
+author: "Kaushal"
+date: "24-03-2026"
+output:html_document
+  
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
@@ -16,7 +16,7 @@ knitr::opts_chunk$set(
 )
 ```
 
----
+
 
 # Introduction
 
@@ -28,7 +28,7 @@ This report presents a logistic regression analysis of the **Diabetes Prediction
 
 The aim is to build and evaluate a logistic regression model to predict the probability of diabetes based on 8 clinical and demographic predictors.
 
----
+
 
 # Setup and Data Loading
 
@@ -52,7 +52,7 @@ dim(df)
 head(df)
 ```
 
----
+
 
 # Data Inspection and Preprocessing
 
@@ -80,7 +80,6 @@ kable(missing_summary, row.names = FALSE,
 ## Encoding and Cleaning
 
 ```{r preprocessing}
-
 df <- df %>%
   mutate(
     gender = case_when(
@@ -88,7 +87,6 @@ df <- df %>%
       gender == "Female" ~ 0,
       TRUE               ~ NA_real_
     ),
-    
     smoking_history = case_when(
       smoking_history == "never"   ~ 0,
       smoking_history == "former"  ~ 1,
@@ -107,7 +105,7 @@ cat("Diabetes cases:", sum(df_clean$diabetes), "\n")
 cat("Prevalence:", round(mean(df_clean$diabetes) * 100, 2), "%\n")
 ```
 
----
+
 
 # Exploratory Data Analysis
 
@@ -116,70 +114,154 @@ cat("Prevalence:", round(mean(df_clean$diabetes) * 100, 2), "%\n")
 ```{r outcome-dist}
 ggplot(df_clean, aes(x = factor(diabetes), fill = factor(diabetes))) +
   geom_bar(width = 0.5, show.legend = FALSE) +
-  scale_fill_manual(values = c("#2196F3", "#F44336")) +
+  scale_fill_manual(values = c("blue", "red")) +
   scale_x_discrete(labels = c("No Diabetes", "Diabetes")) +
   labs(title = "Distribution of Diabetes Outcome",
        x = "Diabetes Status", y = "Count") +
   theme_minimal(base_size = 13)
 ```
 
-## Continuous Predictor Distributions by Outcome
 
-```{r continuous-dist}
-cont_vars <- c("age", "bmi", "HbA1c_level", "blood_glucose_level")
 
-plots <- lapply(cont_vars, function(var) {
-  ggplot(df_clean, aes_string(x = var, fill = "factor(diabetes)")) +
-    geom_density(alpha = 0.6) +
-    scale_fill_manual(values = c("#2196F3", "#F44336"),
-                      labels = c("No Diabetes", "Diabetes"),
-                      name = "") +
-    labs(title = var, x = var, y = "Density") +
-    theme_minimal(base_size = 11)
-})
 
-grid.arrange(grobs = plots, ncol = 2)
+# Model Building
+
+## Train-Test Split
+
+```{r train-test-split}
+set.seed(42)
+
+train_index <- createDataPartition(df_clean$diabetes, p = 0.8, list = FALSE)
+train_data  <- df_clean[train_index, ]
+test_data   <- df_clean[-train_index, ]
+
+cat("Training set:", nrow(train_data), "observations\n")
+cat("Test set:", nrow(test_data), "observations\n")
 ```
 
-## Binary Predictors: Diabetes Prevalence
+## Logistic Regression Model
 
-```{r binary-predictors}
-binary_vars <- c("hypertension", "heart_disease")
+```{r logistic-model}
+model <- glm(
+  diabetes ~ age + gender + hypertension + heart_disease +
+             smoking_history + bmi + HbA1c_level + blood_glucose_level,
+  data   = train_data,
+  family = binomial(link = "logit")
+)
 
-prev_table <- df_clean %>%
-  select(all_of(binary_vars), diabetes) %>%
-  pivot_longer(-diabetes, names_to = "variable", values_to = "value") %>%
-  group_by(variable, value) %>%
-  summarise(prevalence = round(mean(diabetes) * 100, 2), .groups = "drop")
-
-ggplot(prev_table, aes(x = factor(value), y = prevalence, fill = variable)) +
-  geom_col(position = "dodge", width = 0.5) +
-  facet_wrap(~variable, scales = "free_x") +
-  scale_fill_manual(values = c("#4CAF50", "#FF9800")) +
-  labs(title = "Diabetes Prevalence by Binary Predictors",
-       x = "Value (0 = No, 1 = Yes)", y = "Prevalence (%)") +
-  theme_minimal(base_size = 12) +
-  theme(legend.position = "none")
+summary(model)
 ```
 
-## Correlation Heatmap (Continuous Variables)
+## Odds Ratios and Confidence Intervals
 
-```{r correlation}
-num_vars <- df_clean %>%
-  select(age, bmi, HbA1c_level, blood_glucose_level, diabetes)
+```{r odds-ratios}
+or_table <- data.frame(
+  Predictor = names(coef(model)),
+  Estimate  = round(coef(model), 4),
+  OR        = round(exp(coef(model)), 4),
+  CI_Lower  = round(exp(confint(model))[, 1], 4),
+  CI_Upper  = round(exp(confint(model))[, 2], 4),
+  P_value   = round(summary(model)$coefficients[, 4], 4)
+)
 
-cor_matrix <- round(cor(num_vars, use = "complete.obs"), 2)
-
-
-cor_df <- as.data.frame(as.table(cor_matrix))
-names(cor_df) <- c("Var1", "Var2", "Correlation")
-
-ggplot(cor_df, aes(Var1, Var2, fill = Correlation)) +
-  geom_tile(color = "white") +
-  geom_text(aes(label = Correlation), size = 3.5) +
-  scale_fill_gradient2(low = "#2196F3", mid = "white", high = "#F44336",
-                       midpoint = 0, limits = c(-1, 1)) +
-  labs(title = "Correlation Heatmap", x = "", y = "") +
-  theme_minimal(base_size = 12) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+kable(or_table, row.names = FALSE,
+      caption = "Logistic Regression: Odds Ratios and 95% Confidence Intervals") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed")) %>%
+  row_spec(which(or_table$P_value < 0.05), bold = TRUE, color = "white",
+           background = "green")
 ```
+
+
+
+# Model Evaluation
+
+## Predictions on Test Set
+
+```{r predictions}
+test_probs <- predict(model, newdata = test_data, type = "response")
+test_preds <- ifelse(test_probs > 0.5, 1, 0)
+```
+
+## Confusion Matrix
+
+```{r confusion-matrix}
+cm <- confusionMatrix(factor(test_preds), factor(test_data$diabetes),
+                      positive = "1")
+print(cm)
+```
+
+## ROC Curve and AUC
+
+```{r roc-curve}
+roc_obj <- roc(test_data$diabetes, test_probs)
+
+plot(roc_obj,
+     col = "grey", lwd = 2.5,
+     main = paste("ROC Curve | AUC =", round(auc(roc_obj), 3)),
+     print.auc = TRUE)
+abline(a = 0, b = 1, lty = 2, col = "grey60")
+```
+
+## Calibration: Hosmer-Lemeshow Test
+
+```{r hosmer-lemeshow}
+hl_test <- hoslem.test(test_data$diabetes, test_probs, g = 10)
+print(hl_test)
+```
+
+A non-significant p-value (p > 0.05) suggests good model calibration.
+
+## Predicted Probability Distribution
+
+```{r pred-prob-dist}
+pred_df <- data.frame(
+  predicted_prob = test_probs,
+  actual         = factor(test_data$diabetes,
+                          labels = c("No Diabetes", "Diabetes"))
+)
+
+ggplot(pred_df, aes(x = predicted_prob, fill = actual)) +
+  geom_histogram(bins = 50, alpha = 0.7, position = "identity") +
+  scale_fill_manual(values = c("blue", "orange"), name = "Actual Status") +
+  labs(title = "Distribution of Predicted Probabilities",
+       x = "Predicted Probability of Diabetes",
+       y = "Count") +
+  theme_minimal(base_size = 12)
+```
+
+
+# Model Performance Summary
+
+```{r performance-summary}
+perf_table <- data.frame(
+  Metric    = c("Accuracy", "Sensitivity (Recall)", "Specificity",
+                "Positive Predictive Value", "Negative Predictive Value",
+                "AUC-ROC"),
+  Value     = c(
+    round(cm$overall["Accuracy"], 4),
+    round(cm$byClass["Sensitivity"], 4),
+    round(cm$byClass["Specificity"], 4),
+    round(cm$byClass["Pos Pred Value"], 4),
+    round(cm$byClass["Neg Pred Value"], 4),
+    round(auc(roc_obj), 4)
+  )
+)
+
+kable(perf_table, row.names = FALSE,
+      caption = "Logistic Regression Model Performance Summary") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"),
+                full_width = FALSE)
+```
+
+
+# Discussion
+No surprises — HbA1c and blood glucose were the strongest predictors, exactly what you'd expect clinically. BMI and age also contributed. Hypertension and heart disease were present but likely overlap with other variables.
+The calibration test flagged a slight issue (p = 0.018), so the model's predicted probabilities aren't perfectly reliable.
+Also worth noting — it's cross-sectional data, so we can't claim causation, just association.
+Overall, solid baseline model. Could be improved by exploring interactions or trying more advanced algorithms.
+
+# Conclusion
+1.The logistic regression model did a great job predicting diabetes with 94.85% accuracy and an AUC of 0.954 — which is honestly impressive.
+2.The two biggest factors driving predictions were HbA1c level and blood glucose level, which makes complete sense medically. Age and BMI also played a role.
+3.The only real weak spot is sensitivity at 63% — meaning it misses about 1 in 3 actual diabetes cases, which isn't ideal if you're using this in a medical setting.
+4.It's a solid, well-performing model. Good enough for a baseline, but you'd want to improve how it catches positive cases before trusting it in the real world.
